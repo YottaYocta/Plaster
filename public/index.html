@@ -2,46 +2,123 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Local Screen Streamer</title>
     <style>
       body {
-        font-family: Arial, sans-serif;
-        padding: 20px;
-        background-color: #f4f4f4;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        padding: 40px 20px 20px 20px;
+        background: #f0f0f5;
+        color: #333;
+        margin: 0;
         text-align: center;
+        position: relative;
+        min-height: 100vh;
       }
 
       h2 {
         color: #333;
+        margin-bottom: 20px;
       }
 
       #startBtn {
-        padding: 10px 20px;
+        padding: 10px 24px;
         font-size: 16px;
         margin-bottom: 20px;
         cursor: pointer;
         background-color: #007bff;
         color: white;
         border: none;
-        border-radius: 5px;
+        border-radius: 8px;
+        transition: background-color 0.3s ease;
       }
 
       #startBtn.streaming {
         background-color: #dc3545;
       }
 
+      #startBtn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      /* Container around canvas, styled like viewer container */
+      .canvas-container {
+        margin: 0 auto;
+        width: 50vw; /* 3/4 viewport width */
+        background: linear-gradient(135deg, #e0e3eb, #f9fafc);
+        padding: 16px 24px;
+        border-radius: 20px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
       canvas {
-        border: 1px solid #ccc;
+        background-color: black;
+        border: 1.5px solid #ccc;
+        border-radius: 12px;
         max-width: 100%;
-        margin-top: 20px;
+        max-height: 100%;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Info Panel fixed top-right */
+      .info-panel {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 16px 24px;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        font-weight: 600;
+        color: #222;
+        min-width: 160px;
+        user-select: none;
+        z-index: 1000;
+        font-size: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .info-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 12px 18px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        text-align: center;
+      }
+
+      .fps-value {
+        color: #007acc;
+        font-weight: 700;
+        font-size: 20px;
+      }
+
+      .time-value {
+        color: #cc7000;
+        font-weight: 700;
+        font-size: 20px;
       }
     </style>
   </head>
   <body>
     <h2>Local Screen Streamer</h2>
     <button id="startBtn">Start Stream</button>
-    <canvas id="previewCanvas" style="display: none"></canvas>
+
+    <div class="canvas-container" style="display: none" id="canvasContainer">
+      <canvas id="previewCanvas"></canvas>
+    </div>
+
+    <div class="info-panel" aria-live="polite" aria-atomic="true">
+      <div class="info-card">FPS: <span id="fps">0</span></div>
+      <div class="info-card">
+        Time since last frame: <span id="timeSince">0.0</span>s
+      </div>
+    </div>
 
     <script>
       const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
@@ -54,7 +131,11 @@
 
       const startBtn = document.getElementById("startBtn");
       const canvas = document.getElementById("previewCanvas");
+      const canvasContainer = document.getElementById("canvasContainer");
       const ctx = canvas.getContext("2d");
+
+      const fpsDisplay = document.getElementById("fps");
+      const timeSinceDisplay = document.getElementById("timeSince");
 
       startBtn.onclick = async () => {
         if (!streaming) {
@@ -70,7 +151,6 @@
 
       async function startStream() {
         try {
-          // Setup WebSocket
           if (!ws || ws.readyState !== WebSocket.OPEN) {
             ws = new WebSocket(WS_URL);
             ws.binaryType = "blob";
@@ -83,9 +163,7 @@
             ws.onerror = (err) => {
               console.error("WebSocket error:", err);
               alert("WebSocket connection error");
-              startBtn.textContent = "Start Stream";
-              startBtn.classList.remove("streaming");
-              streaming = false;
+              resetUI();
             };
 
             ws.onclose = () => {
@@ -98,6 +176,7 @@
         } catch (err) {
           alert("Stream start failed: " + err.message);
           console.error(err);
+          resetUI();
         }
       }
 
@@ -115,13 +194,20 @@
 
           await video.play();
 
+          // Set canvas size to video
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
-          canvas.style.display = "block";
+
+          // Show container with canvas
+          canvasContainer.style.display = "flex";
 
           streaming = true;
           startBtn.textContent = "Pause Stream";
           startBtn.classList.add("streaming");
+
+          let frames = 0;
+          let lastFrameTime = performance.now();
+          let lastFpsUpdate = lastFrameTime;
 
           function sendFrame() {
             if (!streaming) return;
@@ -138,11 +224,31 @@
               0.6
             );
 
-            console.log("sent");
+            frames++;
+            const now = performance.now();
+
+            if (now - lastFpsUpdate >= 1000) {
+              fpsDisplay.textContent = frames;
+              frames = 0;
+              lastFpsUpdate = now;
+            }
+
+            lastFrameTime = now;
             animationFrameId = requestAnimationFrame(sendFrame);
           }
 
           sendFrame();
+
+          // Update time since last frame every 100ms
+          const timerInterval = setInterval(() => {
+            if (!streaming) {
+              clearInterval(timerInterval);
+              return;
+            }
+            const now = performance.now();
+            const secondsSince = ((now - lastFrameTime) / 1000).toFixed(1);
+            timeSinceDisplay.textContent = secondsSince;
+          }, 100);
 
           stream.getVideoTracks()[0].addEventListener("ended", () => {
             stopStream();
@@ -154,7 +260,7 @@
         } catch (err) {
           alert("Screen capture failed: " + err.message);
           console.error(err);
-          stopStream();
+          resetUI();
         }
       }
 
@@ -175,9 +281,16 @@
           ws.close();
         }
 
+        resetUI();
+      }
+
+      function resetUI() {
         startBtn.textContent = "Start Stream";
         startBtn.classList.remove("streaming");
-        canvas.style.display = "none";
+        startBtn.disabled = false;
+        canvasContainer.style.display = "none";
+        fpsDisplay.textContent = "0";
+        timeSinceDisplay.textContent = "0.0";
       }
     </script>
   </body>

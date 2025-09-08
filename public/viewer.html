@@ -1,35 +1,115 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
     <title>VR Viewer</title>
     <style>
+      * {
+        box-sizing: border-box;
+      }
+
       html,
       body {
         margin: 0;
         padding: 0;
         height: 100%;
-        background: black;
+        background: #f0f0f5; /* light gray background */
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: #333;
         display: flex;
         justify-content: center;
         align-items: center;
       }
+
+      body {
+        padding: 40px;
+      }
+
+      .container {
+        position: relative;
+        width: 100%;
+        max-width: 1100px;
+        min-width: 75vw; /* 3/4 viewport width */
+        min-height: 50vh; /* 1/2 viewport height */
+        border-radius: 16px;
+        overflow: hidden;
+        background: linear-gradient(145deg, #ffffff, #e6e6e6);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+        border: 2px solid #dcdcdc;
+        padding: 16px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
       img {
-        max-width: 100vw;
-        max-height: 100vh;
+        width: 100%;
+        max-height: 100%;
         object-fit: contain;
-        background: black;
+        background-color: #000;
+        display: block;
+        border-radius: 12px;
+        border: 1px solid #ccc;
+      }
+
+      /* Status Panel container */
+      .status-panel {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 16px 20px;
+        border-radius: 14px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+        user-select: none;
+        min-width: 140px;
+        font-weight: 600;
+        font-size: 15px;
+        color: #222;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 12px 18px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        text-align: center;
+      }
+
+      .fps-card span {
+        color: #007acc;
+        font-weight: 700;
+        font-size: 20px;
+      }
+
+      .timer-card span {
+        color: #cc7000;
+        font-weight: 700;
+        font-size: 20px;
       }
     </style>
   </head>
   <body>
-    <img id="stream" alt="VR Stream" />
+    <div class="container">
+      <img id="stream" alt="VR Stream" />
+    </div>
+    <div class="status-panel">
+      <div class="card fps-card">FPS: <span id="fps">0</span></div>
+      <div class="card timer-card">
+        Time since last frame: <span id="timeSince">0.0</span>s
+      </div>
+    </div>
+
     <script>
       const img = document.getElementById("stream");
+      const fpsDisplay = document.getElementById("fps");
+      const timeSinceDisplay = document.getElementById("timeSince");
 
-      // Use wss:// because your server uses HTTPS
       const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
       const ws = new WebSocket(`${wsProtocol}://${location.host}`);
-
       ws.binaryType = "blob";
 
       ws.onopen = () => {
@@ -37,22 +117,43 @@
         console.log("WebSocket connected as viewer");
       };
 
+      ws.onerror = (e) => {
+        console.error("WebSocket error:", e);
+      };
+
       let currentUrl = null;
+      let frames = 0;
+      let lastFrameTime = performance.now();
+      let lastFpsUpdate = lastFrameTime;
+
+      // Update timer since last frame every 100ms
+      setInterval(() => {
+        const now = performance.now();
+        const secondsSince = ((now - lastFrameTime) / 1000).toFixed(2);
+        timeSinceDisplay.textContent = secondsSince;
+      }, 100);
 
       ws.onmessage = (event) => {
         const blob = event.data;
 
-        // Revoke previous URL
         if (currentUrl) {
           URL.revokeObjectURL(currentUrl);
         }
 
         currentUrl = URL.createObjectURL(blob);
         img.src = currentUrl;
-      };
 
-      ws.onerror = (e) => {
-        console.error("WebSocket error:", e);
+        frames++;
+        const now = performance.now();
+
+        // Update FPS every 1 second
+        if (now - lastFpsUpdate >= 1000) {
+          fpsDisplay.textContent = frames;
+          frames = 0;
+          lastFpsUpdate = now;
+        }
+
+        lastFrameTime = now;
       };
 
       ws.onclose = () => {
