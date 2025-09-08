@@ -1,88 +1,183 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Local Screen Streamer</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background-color: #f4f4f4;
+        text-align: center;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      #startBtn {
+        padding: 10px 20px;
+        font-size: 16px;
+        margin-bottom: 20px;
+        cursor: pointer;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+      }
+
+      #startBtn.streaming {
+        background-color: #dc3545;
+      }
+
+      canvas {
+        border: 1px solid #ccc;
+        max-width: 100%;
+        margin-top: 20px;
+      }
+    </style>
   </head>
   <body>
     <h2>Local Screen Streamer</h2>
     <button id="startBtn">Start Stream</button>
+    <canvas id="previewCanvas" style="display: none"></canvas>
 
     <script>
       const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
       const WS_URL = `${wsProtocol}://${location.host}`;
 
       let ws;
+      let streaming = false;
+      let stream = null;
+      let animationFrameId = null;
 
-      document.getElementById("startBtn").onclick = async () => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          alert("Stream already running");
-          return;
+      const startBtn = document.getElementById("startBtn");
+      const canvas = document.getElementById("previewCanvas");
+      const ctx = canvas.getContext("2d");
+
+      startBtn.onclick = async () => {
+        if (!streaming) {
+          // Start streaming
+          startBtn.disabled = true;
+          await startStream();
+          startBtn.disabled = false;
+        } else {
+          // Stop streaming
+          stopStream();
         }
-
-        ws = new WebSocket(WS_URL);
-        ws.binaryType = "blob";
-
-        ws.onopen = () => {
-          console.log("WebSocket connected");
-          startCapture();
-        };
-        ws.onerror = (err) => {
-          console.error("WebSocket error:", err);
-          alert("WebSocket connection error");
-        };
-        ws.onclose = () => {
-          console.log("WebSocket closed");
-        };
       };
 
-      async function startCapture() {
+      async function startStream() {
         try {
-          const stream = await navigator.mediaDevices.getDisplayMedia({
+          // Setup WebSocket
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            ws = new WebSocket(WS_URL);
+            ws.binaryType = "blob";
+
+            ws.onopen = () => {
+              console.log("WebSocket connected");
+              initCapture();
+            };
+
+            ws.onerror = (err) => {
+              console.error("WebSocket error:", err);
+              alert("WebSocket connection error");
+              startBtn.textContent = "Start Stream";
+              startBtn.classList.remove("streaming");
+              streaming = false;
+            };
+
+            ws.onclose = () => {
+              console.log("WebSocket closed");
+              stopStream();
+            };
+          } else {
+            initCapture();
+          }
+        } catch (err) {
+          alert("Stream start failed: " + err.message);
+          console.error(err);
+        }
+      }
+
+      async function initCapture() {
+        try {
+          stream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
           });
           const video = document.createElement("video");
           video.srcObject = stream;
 
-          // Wait until video metadata is loaded
           await new Promise((resolve) => {
             video.onloadedmetadata = () => resolve();
           });
 
-          // Wait until video starts playing and has real frames
           await video.play();
-
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
 
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
+          canvas.style.display = "block";
+
+          streaming = true;
+          startBtn.textContent = "Pause Stream";
+          startBtn.classList.add("streaming");
 
           function sendFrame() {
+            if (!streaming) return;
+
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             canvas.toBlob(
               (blob) => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                   ws.send(blob);
-                  console.log("send");
                 }
               },
               "image/jpeg",
               0.6
             );
 
-            requestAnimationFrame(sendFrame);
+            console.log("sent");
+            animationFrameId = requestAnimationFrame(sendFrame);
           }
+
           sendFrame();
 
-          window.addEventListener("beforeunload", () => {
-            stream.getTracks().forEach((track) => track.stop());
-            ws.close();
+          stream.getVideoTracks()[0].addEventListener("ended", () => {
+            stopStream();
           });
-        } catch (e) {
-          alert("Screen capture failed: " + e.message);
-          console.error(e);
+
+          window.addEventListener("beforeunload", () => {
+            stopStream();
+          });
+        } catch (err) {
+          alert("Screen capture failed: " + err.message);
+          console.error(err);
+          stopStream();
         }
+      }
+
+      function stopStream() {
+        streaming = false;
+
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+          stream = null;
+        }
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+
+        startBtn.textContent = "Start Stream";
+        startBtn.classList.remove("streaming");
+        canvas.style.display = "none";
       }
     </script>
   </body>
