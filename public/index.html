@@ -24,7 +24,7 @@
       #startBtn {
         padding: 10px 24px;
         font-size: 16px;
-        margin-bottom: 20px;
+        margin-bottom: 12px;
         cursor: pointer;
         background-color: #007bff;
         color: white;
@@ -40,6 +40,20 @@
       #startBtn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+      }
+
+      /* Slider container */
+      .slider-container {
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+      }
+
+      input[type="range"] {
+        width: 250px;
+        cursor: pointer;
       }
 
       /* Container around canvas, styled like viewer container */
@@ -109,14 +123,31 @@
     <h2>Local Screen Streamer</h2>
     <button id="startBtn">Start Stream</button>
 
+    <div class="slider-container">
+      <label for="scaleRange">Scale:</label>
+      <input
+        type="range"
+        id="scaleRange"
+        min="0.1"
+        max="1"
+        step="0.05"
+        value="1"
+        title="Downscale factor"
+      />
+      <span id="scaleValue">1.00</span>
+    </div>
+
     <div class="canvas-container" style="display: none" id="canvasContainer">
       <canvas id="previewCanvas"></canvas>
     </div>
 
     <div class="info-panel" aria-live="polite" aria-atomic="true">
-      <div class="info-card">FPS: <span id="fps">0</span></div>
       <div class="info-card">
-        Time since last frame: <span id="timeSince">0.0</span>s
+        FPS: <span id="fps" class="fps-value">0</span>
+      </div>
+      <div class="info-card">
+        Time since last frame:
+        <span id="timeSince" class="time-value">0.0</span>s
       </div>
     </div>
 
@@ -136,6 +167,17 @@
 
       const fpsDisplay = document.getElementById("fps");
       const timeSinceDisplay = document.getElementById("timeSince");
+      const scaleRange = document.getElementById("scaleRange");
+      const scaleValue = document.getElementById("scaleValue");
+
+      // Current scale factor (1 by default)
+      let scaleFactor = parseFloat(scaleRange.value);
+
+      // Update scale factor label and variable on slider change
+      scaleRange.addEventListener("input", () => {
+        scaleFactor = parseFloat(scaleRange.value);
+        scaleValue.textContent = scaleFactor.toFixed(2);
+      });
 
       startBtn.onclick = async () => {
         if (!streaming) {
@@ -194,7 +236,7 @@
 
           await video.play();
 
-          // Set canvas size to video
+          // Set canvas size to video original size (full res)
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
 
@@ -212,7 +254,15 @@
           function sendFrame() {
             if (!streaming) return;
 
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Calculate scaled dimensions
+            const scaledWidth = Math.floor(video.videoWidth * scaleFactor);
+            const scaledHeight = Math.floor(video.videoHeight * scaleFactor);
+
+            // Resize canvas temporarily for scaled drawing
+            canvas.width = scaledWidth;
+            canvas.height = scaledHeight;
+
+            ctx.drawImage(video, 0, 0, scaledWidth, scaledHeight);
 
             canvas.toBlob(
               (blob) => {
@@ -291,6 +341,15 @@
         canvasContainer.style.display = "none";
         fpsDisplay.textContent = "0";
         timeSinceDisplay.textContent = "0.0";
+
+        // Reset canvas size to default 0
+        canvas.width = 0;
+        canvas.height = 0;
+
+        // Reset scale slider to 1.0 and label
+        scaleRange.value = 1;
+        scaleValue.textContent = "1.00";
+        scaleFactor = 1;
       }
     </script>
   </body>
