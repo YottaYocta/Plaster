@@ -2,83 +2,56 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Local Screen Streamer</title>
+    <title>WebRTC Streamer</title>
     <style>
       body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        padding: 40px 20px 20px 20px;
-        background: #f0f0f5;
-        color: #333;
+        font-family: sans-serif;
+        background: #f5f7fa;
         margin: 0;
-        text-align: center;
-        position: relative;
-        min-height: 100vh;
+        padding: 30px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
       }
 
       h2 {
-        color: #333;
-        margin-bottom: 20px;
+        margin-bottom: 10px;
       }
 
       #startBtn {
-        padding: 10px 24px;
+        padding: 10px 20px;
         font-size: 16px;
-        margin-bottom: 12px;
-        cursor: pointer;
-        background-color: #007bff;
+        background: #007bff;
         color: white;
         border: none;
-        border-radius: 8px;
-        transition: background-color 0.3s ease;
-      }
-
-      #startBtn.streaming {
-        background-color: #dc3545;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        cursor: pointer;
       }
 
       #startBtn:disabled {
-        opacity: 0.6;
+        background: #999;
         cursor: not-allowed;
       }
 
-      /* Slider container */
-      .slider-container {
-        margin-bottom: 20px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 12px;
-      }
-
-      input[type="range"] {
-        width: 250px;
-        cursor: pointer;
-      }
-
-      /* Container around canvas, styled like viewer container */
-      .canvas-container {
-        margin: 0 auto;
-        width: 50vw; /* 3/4 viewport width */
-        background: linear-gradient(135deg, #e0e3eb, #f9fafc);
-        padding: 16px 24px;
-        border-radius: 20px;
+      .preview-container {
+        width: 75vw;
+        min-height: 50vh;
+        background: white;
+        border-radius: 16px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
         display: flex;
         justify-content: center;
         align-items: center;
+        padding: 16px;
       }
 
-      canvas {
-        background-color: black;
-        border: 1.5px solid #ccc;
-        border-radius: 12px;
+      video {
         max-width: 100%;
-        max-height: 100%;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        background: black;
       }
 
-      /* Info Panel fixed top-right */
       .info-panel {
         position: fixed;
         top: 20px;
@@ -90,18 +63,17 @@
         font-weight: 600;
         color: #222;
         min-width: 160px;
-        user-select: none;
-        z-index: 1000;
         font-size: 15px;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 10px;
+        z-index: 999;
       }
 
       .info-card {
         background: #fff;
-        border-radius: 12px;
-        padding: 12px 18px;
+        border-radius: 10px;
+        padding: 10px 16px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         text-align: center;
       }
@@ -120,237 +92,125 @@
     </style>
   </head>
   <body>
-    <h2>Local Screen Streamer</h2>
-    <button id="startBtn">Start Stream</button>
+    <h2>WebRTC Streamer</h2>
+    <button id="startBtn">Start Streaming</button>
 
-    <div class="slider-container">
-      <label for="scaleRange">Scale:</label>
-      <input
-        type="range"
-        id="scaleRange"
-        min="0.1"
-        max="1"
-        step="0.05"
-        value="1"
-        title="Downscale factor"
-      />
-      <span id="scaleValue">1.00</span>
+    <div class="preview-container">
+      <video id="localVideo" autoplay muted playsinline></video>
     </div>
 
-    <div class="canvas-container" style="display: none" id="canvasContainer">
-      <canvas id="previewCanvas"></canvas>
-    </div>
-
-    <div class="info-panel" aria-live="polite" aria-atomic="true">
+    <div class="info-panel">
+      <div class="info-card">FPS: <span id="fps">0</span></div>
       <div class="info-card">
-        FPS: <span id="fps" class="fps-value">0</span>
-      </div>
-      <div class="info-card">
-        Time since last frame:
-        <span id="timeSince" class="time-value">0.0</span>s
+        Last Frame: <span id="timeSince">0.0</span>s ago
       </div>
     </div>
 
     <script>
-      const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
-      const WS_URL = `${wsProtocol}://${location.host}`;
-
-      let ws;
-      let streaming = false;
-      let stream = null;
-      let animationFrameId = null;
-
       const startBtn = document.getElementById("startBtn");
-      const canvas = document.getElementById("previewCanvas");
-      const canvasContainer = document.getElementById("canvasContainer");
-      const ctx = canvas.getContext("2d");
-
+      const video = document.getElementById("localVideo");
       const fpsDisplay = document.getElementById("fps");
       const timeSinceDisplay = document.getElementById("timeSince");
-      const scaleRange = document.getElementById("scaleRange");
-      const scaleValue = document.getElementById("scaleValue");
 
-      // Current scale factor (1 by default)
-      let scaleFactor = parseFloat(scaleRange.value);
+      let ws, pc;
+      let frames = 0;
+      let lastFrameTime = performance.now();
+      let lastFpsUpdate = performance.now();
 
-      // Update scale factor label and variable on slider change
-      scaleRange.addEventListener("input", () => {
-        scaleFactor = parseFloat(scaleRange.value);
-        scaleValue.textContent = scaleFactor.toFixed(2);
-      });
+      const updateTimeSince = setInterval(() => {
+        const now = performance.now();
+        const diff = (now - lastFrameTime) / 1000;
+        timeSinceDisplay.textContent = diff.toFixed(1);
+      }, 100);
 
       startBtn.onclick = async () => {
-        if (!streaming) {
-          // Start streaming
-          startBtn.disabled = true;
-          await startStream();
-          startBtn.disabled = false;
-        } else {
-          // Stop streaming
-          stopStream();
-        }
-      };
+        startBtn.disabled = true;
 
-      async function startStream() {
-        try {
-          if (!ws || ws.readyState !== WebSocket.OPEN) {
-            ws = new WebSocket(WS_URL);
-            ws.binaryType = "blob";
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+        });
 
-            ws.onopen = () => {
-              console.log("WebSocket connected");
-              initCapture();
-            };
+        video.srcObject = stream;
 
-            ws.onerror = (err) => {
-              console.error("WebSocket error:", err);
-              alert("WebSocket connection error");
-              resetUI();
-            };
+        pc = new RTCPeerConnection({
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        });
 
-            ws.onclose = () => {
-              console.log("WebSocket closed");
-              stopStream();
-            };
-          } else {
-            initCapture();
-          }
-        } catch (err) {
-          alert("Stream start failed: " + err.message);
-          console.error(err);
-          resetUI();
-        }
-      }
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      async function initCapture() {
-        try {
-          stream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-          });
-          const video = document.createElement("video");
-          video.srcObject = stream;
-
-          await new Promise((resolve) => {
-            video.onloadedmetadata = () => resolve();
-          });
-
-          await video.play();
-
-          // Set canvas size to video original size (full res)
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-
-          // Show container with canvas
-          canvasContainer.style.display = "flex";
-
-          streaming = true;
-          startBtn.textContent = "Pause Stream";
-          startBtn.classList.add("streaming");
-
-          let frames = 0;
-          let lastFrameTime = performance.now();
-          let lastFpsUpdate = lastFrameTime;
-
-          function sendFrame() {
-            if (!streaming) return;
-
-            // Calculate scaled dimensions
-            const scaledWidth = Math.floor(video.videoWidth * scaleFactor);
-            const scaledHeight = Math.floor(video.videoHeight * scaleFactor);
-
-            // Resize canvas temporarily for scaled drawing
-            canvas.width = scaledWidth;
-            canvas.height = scaledHeight;
-
-            ctx.drawImage(video, 0, 0, scaledWidth, scaledHeight);
-
-            canvas.toBlob(
-              (blob) => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                  ws.send(blob);
-                }
-              },
-              "image/jpeg",
-              0.6
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            ws.send(
+              JSON.stringify({ type: "candidate", candidate: e.candidate })
             );
+          }
+        };
 
+        ws = new WebSocket(
+          `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`
+        );
+
+        ws.onopen = async () => {
+          console.log("✅ WebSocket signaling connected (Streamer)");
+          ws.send(JSON.stringify({ type: "register", role: "broadcaster" }));
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(JSON.stringify({ type: "offer", offer }));
+        };
+
+        ws.onmessage = async ({ data }) => {
+          try {
+            const msg = JSON.parse(data);
+            console.log("📩 Received message:", msg);
+
+            if (msg.type === "answer") {
+              await pc.setRemoteDescription(
+                new RTCSessionDescription(msg.answer)
+              );
+            } else if (msg.type === "candidate") {
+              await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+            }
+          } catch (err) {
+            console.error("❌ Error parsing signaling message:", err);
+          }
+        };
+
+        // Track frame updates for diagnostics
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        const track = stream.getVideoTracks()[0];
+        const [width, height] = [128, 72];
+        canvas.width = width;
+        canvas.height = height;
+
+        const imgCapture = new ImageCapture(track);
+        async function monitorFrames() {
+          if (!stream.active) return;
+
+          try {
+            const bitmap = await imgCapture.grabFrame();
+            ctx.drawImage(bitmap, 0, 0, width, height);
             frames++;
             const now = performance.now();
+            lastFrameTime = now;
 
-            if (now - lastFpsUpdate >= 1000) {
+            if (now - lastFpsUpdate > 1000) {
               fpsDisplay.textContent = frames;
               frames = 0;
               lastFpsUpdate = now;
             }
-
-            lastFrameTime = now;
-            animationFrameId = requestAnimationFrame(sendFrame);
+          } catch (e) {
+            console.warn("Frame grab failed", e);
           }
 
-          sendFrame();
-
-          // Update time since last frame every 100ms
-          const timerInterval = setInterval(() => {
-            if (!streaming) {
-              clearInterval(timerInterval);
-              return;
-            }
-            const now = performance.now();
-            const secondsSince = ((now - lastFrameTime) / 1000).toFixed(1);
-            timeSinceDisplay.textContent = secondsSince;
-          }, 100);
-
-          stream.getVideoTracks()[0].addEventListener("ended", () => {
-            stopStream();
-          });
-
-          window.addEventListener("beforeunload", () => {
-            stopStream();
-          });
-        } catch (err) {
-          alert("Screen capture failed: " + err.message);
-          console.error(err);
-          resetUI();
-        }
-      }
-
-      function stopStream() {
-        streaming = false;
-
-        if (animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-          animationFrameId = null;
+          requestAnimationFrame(monitorFrames);
         }
 
-        if (stream) {
-          stream.getTracks().forEach((track) => track.stop());
-          stream = null;
-        }
-
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
-
-        resetUI();
-      }
-
-      function resetUI() {
-        startBtn.textContent = "Start Stream";
-        startBtn.classList.remove("streaming");
-        startBtn.disabled = false;
-        canvasContainer.style.display = "none";
-        fpsDisplay.textContent = "0";
-        timeSinceDisplay.textContent = "0.0";
-
-        // Reset canvas size to default 0
-        canvas.width = 0;
-        canvas.height = 0;
-
-        // Reset scale slider to 1.0 and label
-        scaleRange.value = 1;
-        scaleValue.textContent = "1.00";
-        scaleFactor = 1;
-      }
+        monitorFrames();
+        startBtn.textContent = "Streaming...";
+      };
     </script>
   </body>
 </html>

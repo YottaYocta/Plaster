@@ -2,166 +2,111 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>VR Viewer</title>
+    <title>Viewer (WebRTC)</title>
     <style>
-      * {
-        box-sizing: border-box;
-      }
-
-      html,
       body {
+        font-family: Arial, sans-serif;
+        background-color: #f0f2f5;
         margin: 0;
-        padding: 0;
-        height: 100%;
-        background: #f0f0f5; /* light gray background */
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        color: #333;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-
-      body {
-        padding: 40px;
-      }
-
-      .container {
-        position: relative;
-        width: 100%;
-        max-width: 1100px;
-        min-width: 75vw; /* 3/4 viewport width */
-        min-height: 50vh; /* 1/2 viewport height */
-        border-radius: 16px;
-        overflow: hidden;
-        background: linear-gradient(145deg, #ffffff, #e6e6e6);
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
-        border: 2px solid #dcdcdc;
-        padding: 16px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-
-      img {
-        width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-        background-color: #000;
-        display: block;
-        border-radius: 12px;
-        border: 1px solid #ccc;
-      }
-
-      /* Status Panel container */
-      .status-panel {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        background: rgba(255, 255, 255, 0.95);
-        padding: 16px 20px;
-        border-radius: 14px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-        user-select: none;
-        min-width: 140px;
-        font-weight: 600;
-        font-size: 15px;
-        color: #222;
-      }
-
-      .card {
-        background: #fff;
-        border-radius: 12px;
-        padding: 12px 18px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        padding: 40px 20px;
         text-align: center;
       }
 
-      .fps-card span {
-        color: #007acc;
-        font-weight: 700;
-        font-size: 20px;
+      h2 {
+        color: #333;
       }
 
-      .timer-card span {
-        color: #cc7000;
-        font-weight: 700;
-        font-size: 20px;
+      video {
+        width: 80%;
+        max-width: 960px;
+        border: 2px solid #ccc;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <img id="stream" alt="VR Stream" />
-    </div>
-    <div class="status-panel">
-      <div class="card fps-card">FPS: <span id="fps">0</span></div>
-      <div class="card timer-card">
-        Time since last frame: <span id="timeSince">0.0</span>s
-      </div>
-    </div>
+    <h2>WebRTC Viewer</h2>
+    <video id="remoteVideo" autoplay playsinline controls></video>
 
     <script>
-      const img = document.getElementById("stream");
-      const fpsDisplay = document.getElementById("fps");
-      const timeSinceDisplay = document.getElementById("timeSince");
+      const video = document.getElementById("remoteVideo");
 
-      const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
-      const ws = new WebSocket(`${wsProtocol}://${location.host}`);
-      ws.binaryType = "blob";
+      let ws;
+      let pc = null;
+      let stream = null;
 
-      ws.onopen = () => {
-        ws.send("viewer");
-        console.log("WebSocket connected as viewer");
-      };
+      function createPeerConnection() {
+        const newPc = new RTCPeerConnection({
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        });
 
-      ws.onerror = (e) => {
-        console.error("WebSocket error:", e);
-      };
+        newPc.onicecandidate = (e) => {
+          if (e.candidate) {
+            ws.send(
+              JSON.stringify({ type: "candidate", candidate: e.candidate })
+            );
+          }
+        };
 
-      let currentUrl = null;
-      let frames = 0;
-      let lastFrameTime = performance.now();
-      let lastFpsUpdate = lastFrameTime;
+        newPc.ontrack = (event) => {
+          console.log("🎥 New remote track received");
+          if (stream) {
+            // Remove previous stream tracks
+            stream.getTracks().forEach((track) => track.stop());
+          }
 
-      // Update timer since last frame every 100ms
-      setInterval(() => {
-        const now = performance.now();
-        const secondsSince = ((now - lastFrameTime) / 1000).toFixed(2);
-        timeSinceDisplay.textContent = secondsSince;
-      }, 100);
+          stream = event.streams[0];
+          video.srcObject = stream;
+        };
 
-      ws.onmessage = (event) => {
-        const blob = event.data;
+        return newPc;
+      }
 
-        if (currentUrl) {
-          URL.revokeObjectURL(currentUrl);
-        }
+      function setupWebSocket() {
+        ws = new WebSocket(
+          `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`
+        );
 
-        currentUrl = URL.createObjectURL(blob);
-        img.src = currentUrl;
+        ws.onopen = () => {
+          console.log("✅ WebSocket connected to signaling server (Viewer)");
+          ws.send(JSON.stringify({ type: "register", role: "viewer" }));
+        };
 
-        frames++;
-        const now = performance.now();
+        ws.onmessage = async ({ data }) => {
+          try {
+            const msg = JSON.parse(data);
+            console.log("📩 Received signaling message:", msg);
 
-        // Update FPS every 1 second
-        if (now - lastFpsUpdate >= 1000) {
-          fpsDisplay.textContent = frames;
-          frames = 0;
-          lastFpsUpdate = now;
-        }
+            if (msg.type === "offer") {
+              console.log("🔁 New offer received – resetting connection");
 
-        lastFrameTime = now;
-      };
+              if (pc) {
+                pc.close();
+                pc = null;
+              }
 
-      ws.onclose = () => {
-        console.log("WebSocket closed");
-        if (currentUrl) {
-          URL.revokeObjectURL(currentUrl);
-        }
-      };
+              pc = createPeerConnection();
+
+              await pc.setRemoteDescription(
+                new RTCSessionDescription(msg.offer)
+              );
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+
+              ws.send(JSON.stringify({ type: "answer", answer }));
+            }
+
+            if (msg.type === "candidate" && msg.candidate && pc) {
+              await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+            }
+          } catch (err) {
+            console.error("❌ Failed to process signaling message:", err);
+          }
+        };
+      }
+
+      setupWebSocket();
     </script>
   </body>
 </html>
