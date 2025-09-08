@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>VR Viewer</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: black;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      img {
+        max-width: 100vw;
+        max-height: 100vh;
+        object-fit: contain;
+        background: black;
+      }
+    </style>
+  </head>
+  <body>
+    <img id="stream" alt="VR Stream" />
+    <script>
+      const img = document.getElementById("stream");
+
+      // Use wss:// because your server uses HTTPS
+      const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${wsProtocol}://${location.host}`);
+
+      ws.binaryType = "blob";
+
+      ws.onopen = () => {
+        ws.send("viewer");
+        console.log("WebSocket connected as viewer");
+      };
+
+      let currentUrl = null;
+
+      ws.onmessage = (event) => {
+        const blob = event.data;
+
+        // Revoke previous URL
+        if (currentUrl) {
+          URL.revokeObjectURL(currentUrl);
+        }
+
+        currentUrl = URL.createObjectURL(blob);
+        img.src = currentUrl;
+      };
+
+      ws.onerror = (e) => {
+        console.error("WebSocket error:", e);
+      };
+
+      ws.onclose = () => {
+        console.log("WebSocket closed");
+        if (currentUrl) {
+          URL.revokeObjectURL(currentUrl);
+        }
+      };
+    </script>
+  </body>
+</html>

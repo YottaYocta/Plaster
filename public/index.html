@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Local Screen Streamer</title>
+  </head>
+  <body>
+    <h2>Local Screen Streamer</h2>
+    <button id="startBtn">Start Stream</button>
+
+    <script>
+      const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+      const WS_URL = `${wsProtocol}://${location.host}`;
+
+      let ws;
+
+      document.getElementById("startBtn").onclick = async () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          alert("Stream already running");
+          return;
+        }
+
+        ws = new WebSocket(WS_URL);
+        ws.binaryType = "blob";
+
+        ws.onopen = () => {
+          console.log("WebSocket connected");
+          startCapture();
+        };
+        ws.onerror = (err) => {
+          console.error("WebSocket error:", err);
+          alert("WebSocket connection error");
+        };
+        ws.onclose = () => {
+          console.log("WebSocket closed");
+        };
+      };
+
+      async function startCapture() {
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+          });
+          const video = document.createElement("video");
+          video.srcObject = stream;
+
+          // Wait until video metadata is loaded
+          await new Promise((resolve) => {
+            video.onloadedmetadata = () => resolve();
+          });
+
+          // Wait until video starts playing and has real frames
+          await video.play();
+
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+
+          function sendFrame() {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(
+              (blob) => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                  ws.send(blob);
+                  console.log("send");
+                }
+              },
+              "image/jpeg",
+              0.6
+            );
+
+            requestAnimationFrame(sendFrame);
+          }
+          sendFrame();
+
+          window.addEventListener("beforeunload", () => {
+            stream.getTracks().forEach((track) => track.stop());
+            ws.close();
+          });
+        } catch (e) {
+          alert("Screen capture failed: " + e.message);
+          console.error(e);
+        }
+      }
+    </script>
+  </body>
+</html>
