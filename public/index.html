@@ -44,6 +44,7 @@
         justify-content: center;
         align-items: center;
         padding: 16px;
+        margin-bottom: 20px;
       }
 
       video {
@@ -89,10 +90,83 @@
         font-weight: 700;
         font-size: 20px;
       }
+
+      .controls {
+        background: white;
+        border-radius: 12px;
+        padding: 16px 24px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        max-width: 600px;
+        width: 100%;
+        margin-bottom: 20px;
+      }
+
+      .control-group {
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      label {
+        flex: 1;
+        font-weight: 600;
+      }
+
+      input[type="range"] {
+        flex: 3;
+      }
+
+      select {
+        flex: 3;
+        padding: 6px 8px;
+      }
+
+      .value-display {
+        width: 60px;
+        text-align: right;
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
     <h2>WebRTC Streamer</h2>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="bitrateRange">Max Bitrate (kbps):</label>
+        <input
+          type="range"
+          id="bitrateRange"
+          min="50"
+          max="1000"
+          value="150"
+          step="10"
+        />
+        <div class="value-display" id="bitrateValue">150</div>
+      </div>
+
+      <div class="control-group">
+        <label for="prioritySelect">Priority:</label>
+        <select id="prioritySelect">
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high" selected>High</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="degradationSelect">Degradation Preference:</label>
+        <select id="degradationSelect">
+          <option value="maintain-framerate" selected>
+            Maintain Framerate
+          </option>
+          <option value="maintain-resolution">Maintain Resolution</option>
+          <option value="balanced">Balanced</option>
+        </select>
+      </div>
+    </div>
+
     <button id="startBtn">Start Streaming</button>
 
     <div class="preview-container">
@@ -112,16 +186,58 @@
       const fpsDisplay = document.getElementById("fps");
       const timeSinceDisplay = document.getElementById("timeSince");
 
+      // Controls
+      const bitrateRange = document.getElementById("bitrateRange");
+      const bitrateValue = document.getElementById("bitrateValue");
+      const prioritySelect = document.getElementById("prioritySelect");
+      const degradationSelect = document.getElementById("degradationSelect");
+
       let ws, pc;
       let frames = 0;
       let lastFrameTime = performance.now();
       let lastFpsUpdate = performance.now();
+
+      // Update displayed bitrate value on slider change
+      bitrateRange.addEventListener("input", () => {
+        bitrateValue.textContent = bitrateRange.value;
+        updateSenderParameters();
+      });
+
+      prioritySelect.addEventListener("change", () => {
+        updateSenderParameters();
+      });
+
+      degradationSelect.addEventListener("change", () => {
+        updateSenderParameters();
+      });
 
       const updateTimeSince = setInterval(() => {
         const now = performance.now();
         const diff = (now - lastFrameTime) / 1000;
         timeSinceDisplay.textContent = diff.toFixed(1);
       }, 100);
+
+      let sender; // video RTCRtpSender
+
+      async function updateSenderParameters() {
+        if (!sender) return;
+
+        const parameters = sender.getParameters();
+
+        if (!parameters.encodings) parameters.encodings = [{}];
+
+        parameters.encodings[0].maxBitrate =
+          parseInt(bitrateRange.value) * 1000; // kbps to bps
+        parameters.encodings[0].priority = prioritySelect.value;
+        parameters.degradationPreference = degradationSelect.value;
+
+        try {
+          await sender.setParameters(parameters);
+          // console.log("Updated sender parameters:", parameters);
+        } catch (e) {
+          console.warn("Failed to update sender parameters:", e);
+        }
+      }
 
       startBtn.onclick = async () => {
         startBtn.disabled = true;
@@ -142,20 +258,10 @@
 
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-        // Configure encoding parameters to limit bitrate and frame rate for low bandwidth
-        const sender = pc.getSenders().find((s) => s.track.kind === "video");
+        sender = pc.getSenders().find((s) => s.track.kind === "video");
         if (sender) {
-          const parameters = sender.getParameters();
-
-          if (!parameters.encodings) parameters.encodings = [{}];
-
-          parameters.encodings[0].maxBitrate = 300_000; // 300 kbps
-          parameters.encodings[0].priority = "high";
-          parameters.degradationPreference = "maintain-framerate";
-
-          sender.setParameters(parameters).catch((e) => {
-            console.warn("Failed to set sender parameters:", e);
-          });
+          // Set initial encoding parameters from UI controls
+          await updateSenderParameters();
         }
 
         pc.onicecandidate = (e) => {
@@ -176,16 +282,6 @@
 
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-
-          // Optional: SDP munging example to tweak max frame rate (commented out)
-          /*
-          let sdp = offer.sdp;
-          sdp = sdp.replace(/(a=fmtp:\d+ .*max-fr=)\d+/g, '$115');
-          const newOffer = new RTCSessionDescription({ type: "offer", sdp });
-          await pc.setLocalDescription(newOffer);
-          ws.send(JSON.stringify({ type: "offer", offer: newOffer }));
-          return;
-          */
 
           ws.send(JSON.stringify({ type: "offer", offer }));
         };

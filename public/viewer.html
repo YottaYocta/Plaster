@@ -23,14 +23,74 @@
         border-radius: 12px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
       }
+
+      #fullscreenBtn {
+        margin-top: 16px;
+        padding: 10px 24px;
+        font-size: 16px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      #fullscreenBtn:hover {
+        background-color: #0056b3;
+      }
     </style>
   </head>
   <body>
     <h2>WebRTC Viewer</h2>
     <video id="remoteVideo" autoplay playsinline controls></video>
+    <br />
+    <button id="fullscreenBtn">Full Screen</button>
 
     <script>
       const video = document.getElementById("remoteVideo");
+      const fullscreenBtn = document.getElementById("fullscreenBtn");
+
+      fullscreenBtn.addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+          // Request full screen on the video element
+          if (video.requestFullscreen) {
+            video.requestFullscreen();
+          } else if (video.webkitRequestFullscreen) {
+            video.webkitRequestFullscreen(); // Safari
+          } else if (video.msRequestFullscreen) {
+            video.msRequestFullscreen(); // IE11
+          }
+          fullscreenBtn.textContent = "Exit Full Screen";
+        } else {
+          // Exit full screen
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen(); // Safari
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen(); // IE11
+          }
+          fullscreenBtn.textContent = "Full Screen";
+        }
+      });
+
+      // Handle full screen change to update button text accordingly
+      document.addEventListener("fullscreenchange", () => {
+        if (!document.fullscreenElement) {
+          fullscreenBtn.textContent = "Full Screen";
+        }
+      });
+      document.addEventListener("webkitfullscreenchange", () => {
+        if (!document.webkitFullscreenElement) {
+          fullscreenBtn.textContent = "Full Screen";
+        }
+      });
+      document.addEventListener("msfullscreenchange", () => {
+        if (!document.msFullscreenElement) {
+          fullscreenBtn.textContent = "Full Screen";
+        }
+      });
 
       let ws;
       let pc = null;
