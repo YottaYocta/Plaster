@@ -1,51 +1,36 @@
-const fs = require("fs");
-const https = require("https");
-const express = require("express");
-const WebSocket = require("ws");
-const os = require("os");
-const path = require("path");
-const selfsigned = require("selfsigned");
-
-// 📜 Automatically generate key.pem and cert.pem if missing
-function ensureCertificates() {
-  const keyPath = path.resolve(__dirname, "key.pem");
-  const certPath = path.resolve(__dirname, "cert.pem");
-
-  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-    console.log("🔐 Using existing key.pem and cert.pem");
-    return;
-  }
-
-  console.log(
-    "📄 key.pem and/or cert.pem not found. Generating new self-signed cert..."
-  );
-
-  const attrs = [{ name: "commonName", value: "localhost" }];
-  const pems = selfsigned.generate(attrs, {
-    days: 365,
-    algorithm: "rsa",
-    keySize: 2048,
-    extensions: [{ name: "basicConstraints", cA: true }],
-  });
-
-  fs.writeFileSync(keyPath, pems.private);
-  fs.writeFileSync(certPath, pems.cert);
-
-  console.log("✅ Generated key.pem and cert.pem");
-}
-
-// 🛡️ Ensure certificates before starting HTTPS server
-ensureCertificates();
+import * as https from "https";
+import path from "path";
+import os from "os";
+import { WebSocketServer } from "ws";
+import express from "express";
+import selfsigned from "selfsigned";
+import open from "open";
+import { fileURLToPath } from "url";
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const options = {
-  key: fs.readFileSync("key.pem"),
-  cert: fs.readFileSync("cert.pem"),
-};
+// 🛡️ Generate self-signed cert in memory
+const attrs = [{ name: "commonName", value: "localhost" }];
+const pems = selfsigned.generate(attrs, {
+  days: 365,
+  algorithm: "rsa",
+  keySize: 2048,
+  extensions: [{ name: "basicConstraints", cA: true }],
+});
 
-const server = https.createServer(options, app);
-const wss = new WebSocket.Server({ server });
+// 🖥️ Create HTTPS server with in-memory key/cert
+const server = https.createServer(
+  {
+    key: pems.private,
+    cert: pems.cert,
+  },
+  app
+);
+
+// 🔌 Set up WebSocket over HTTPS
+const wss = new WebSocketServer({ server });
 
 let broadcaster = null;
 let viewers = [];
@@ -67,7 +52,6 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // Register broadcaster or viewer
     if (data.type === "register") {
       if (data.role === "broadcaster") {
         broadcaster = ws;
@@ -79,7 +63,6 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // Forward signaling messages
     if (data.type === "offer" && ws === broadcaster) {
       console.log("➡️ Forwarding offer to viewer");
       viewers.forEach((v) => {
@@ -122,8 +105,10 @@ wss.on("connection", (ws) => {
   });
 });
 
+// 📁 Serve static files from "public"
 app.use(express.static(path.join(__dirname, "public")));
 
+// 🌐 Get local IP for LAN access
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
   for (let name in interfaces) {
@@ -139,6 +124,7 @@ function getLocalIP() {
 const HOST = getLocalIP();
 const PORT = 3000;
 
-server.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, async () => {
   console.log(`✅ HTTPS server running at: https://${HOST}:${PORT}`);
+  await open(`https://${HOST}:${PORT}`);
 });
