@@ -1,11 +1,11 @@
 import * as https from "https";
 import path from "path";
 import os from "os";
-import { WebSocketServer, OPEN } from "ws";
-import express from "express";
+import { WebSocketServer, WebSocket } from "ws";
 import selfsigned from "selfsigned";
 import open from "open";
 import { fileURLToPath } from "url";
+import express from "express";
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -66,13 +66,13 @@ wss.on("connection", (ws) => {
     if (data.type === "offer" && ws === broadcaster) {
       console.log("➡️ Forwarding offer to viewer");
       viewers.forEach((v) => {
-        if (v.readyState === OPEN) v.send(JSON.stringify(data));
+        if (v.readyState === WebSocket.OPEN) v.send(JSON.stringify(data));
       });
     }
 
     if (data.type === "answer" && viewers.includes(ws)) {
       console.log("⬅️ Forwarding answer to broadcaster");
-      if (broadcaster && broadcaster.readyState === OPEN) {
+      if (broadcaster && broadcaster.readyState === WebSocket.OPEN) {
         broadcaster.send(JSON.stringify(data));
       }
     }
@@ -81,10 +81,10 @@ wss.on("connection", (ws) => {
       console.log("🌐 Forwarding ICE candidate");
       if (ws === broadcaster) {
         viewers.forEach((v) => {
-          if (v.readyState === OPEN) v.send(JSON.stringify(data));
+          if (v.readyState === WebSocket.OPEN) v.send(JSON.stringify(data));
         });
       } else {
-        if (broadcaster && broadcaster.readyState === OPEN) {
+        if (broadcaster && broadcaster.readyState === WebSocket.OPEN) {
           broadcaster.send(JSON.stringify(data));
         }
       }
