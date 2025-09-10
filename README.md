@@ -16,7 +16,7 @@ LAN screen livestreaming as an alternative to Meta's broken VR casting
 
    ```bash
    git clone https://github.com/your-username/your-repo-name.git
-   cd your-repo-name
+   cd Plaster
    ```
 
    Or download the ZIP, unzip it, and open the folder in a terminal.
