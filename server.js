@@ -4,6 +4,38 @@ const express = require("express");
 const WebSocket = require("ws");
 const os = require("os");
 const path = require("path");
+const selfsigned = require("selfsigned");
+
+// 📜 Automatically generate key.pem and cert.pem if missing
+function ensureCertificates() {
+  const keyPath = path.resolve(__dirname, "key.pem");
+  const certPath = path.resolve(__dirname, "cert.pem");
+
+  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+    console.log("🔐 Using existing key.pem and cert.pem");
+    return;
+  }
+
+  console.log(
+    "📄 key.pem and/or cert.pem not found. Generating new self-signed cert..."
+  );
+
+  const attrs = [{ name: "commonName", value: "localhost" }];
+  const pems = selfsigned.generate(attrs, {
+    days: 365,
+    algorithm: "rsa",
+    keySize: 2048,
+    extensions: [{ name: "basicConstraints", cA: true }],
+  });
+
+  fs.writeFileSync(keyPath, pems.private);
+  fs.writeFileSync(certPath, pems.cert);
+
+  console.log("✅ Generated key.pem and cert.pem");
+}
+
+// 🛡️ Ensure certificates before starting HTTPS server
+ensureCertificates();
 
 const app = express();
 
@@ -65,12 +97,10 @@ wss.on("connection", (ws) => {
     if (data.type === "candidate") {
       console.log("🌐 Forwarding ICE candidate");
       if (ws === broadcaster) {
-        // Broadcaster to viewers
         viewers.forEach((v) => {
           if (v.readyState === WebSocket.OPEN) v.send(JSON.stringify(data));
         });
       } else {
-        // Viewer to broadcaster
         if (broadcaster && broadcaster.readyState === WebSocket.OPEN) {
           broadcaster.send(JSON.stringify(data));
         }
