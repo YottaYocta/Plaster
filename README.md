@@ -1,5 +1,5 @@
 
-# Setting Up the Plaster App: Easy Step-by-Step Guide
+# Setting Up the App: Easy Step-by-Step Guide
 
 This guide will help you set up and run the app, even if you're new to technical tasks. Follow the steps for your operating system (Windows or Mac). We'll start by checking if you have the required tools, then install them if needed, and finally set up the app.
 
@@ -107,11 +107,12 @@ You can download the Plaster app using Git (recommended) or as a ZIP file.
 
 ---
 
-## Step 5: Accessing the Plaster App
+## Step 5: Using the app
 
 - If the app doesn’t open automatically, open your web browser (e.g., Chrome, Firefox, or Safari).
-- Type `http://localhost:3000` in the address bar and press `Enter`.
-- You should see the Plaster app running! Follow any on-screen instructions provided by the app.
+- Type `https://<IP address>:3000` in the address bar and press `Enter`. The IP address is printed in the terminal when you run `npm run start`
+- If you're screensharing from a VR headset, open oculus browser and type in `https://<IP address>:3000`. This should bring you to the streamer interface
+- If you're watching, follow the link called watcher, which will redirect you to the watcher page
 
 ---
 
