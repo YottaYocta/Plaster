@@ -114,6 +114,7 @@ You can download the Plaster app using Git (recommended) or as a ZIP file.
 - Type `https://<IP address>:3000` in the address bar and press `Enter`. The IP address is printed in the terminal when you run `npm run start`
 - If you're screensharing from a VR headset, open oculus browser and type in `https://<IP address>:3000`. This should bring you to the streamer interface
 - If you're watching, follow the link called watcher, which will redirect you to the watcher page
+- To quit, open the terminal that is running the app and type ctrl+C
 
 ---
 
