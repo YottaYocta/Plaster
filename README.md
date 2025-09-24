@@ -3,6 +3,8 @@
 
 This guide will help you set up and run the app, even if you're new to technical tasks. Follow the steps for your operating system (Windows or Mac). We'll start by checking if you have the required tools, then install them if needed, and finally set up the app.
 
+**Important:** if you've already installed the app and are re-running it, **start from step 4**
+
 ---
 
 ## Step 1: Check If You Have Node.js and Git Installed
