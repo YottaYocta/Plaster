@@ -61,6 +61,8 @@ Before installing anything, let’s check if you already have **Node.js** and **
 
 ---
 
+<img width="1802" height="1160" alt="image" src="https://github.com/user-attachments/assets/43d27ec1-f544-4f85-9eda-2c6cee4666b4" />
+
 ## Step 3: Download the Plaster App
 
 You can download the Plaster app using Git (recommended) or as a ZIP file.
