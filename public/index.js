@@ -1,7 +1,7 @@
 const startBtn = document.getElementById("startBtn");
 const video = document.getElementById("localVideo");
-const fpsDisplay = document.getElementById("fps");
-const timeSinceDisplay = document.getElementById("timeSince");
+// const fpsDisplay = document.getElementById("fps");
+// const timeSinceDisplay = document.getElementById("timeSince");
 
 // Controls
 const bitrateRange = document.getElementById("bitrateRange");
@@ -28,11 +28,11 @@ degradationSelect.addEventListener("change", () => {
   updateSenderParameters();
 });
 
-const updateTimeSince = setInterval(() => {
-  const now = performance.now();
-  const diff = (now - lastFrameTime) / 1000;
-  timeSinceDisplay.textContent = diff.toFixed(1);
-}, 100);
+// const updateTimeSince = setInterval(() => {
+//   const now = performance.now();
+//   const diff = (now - lastFrameTime) / 1000;
+//   timeSinceDisplay.textContent = diff.toFixed(1);
+// }, 100);
 
 let sender; // video RTCRtpSender
 
@@ -136,7 +136,7 @@ startBtn.onclick = async () => {
       lastFrameTime = now;
 
       if (now - lastFpsUpdate > 1000) {
-        fpsDisplay.textContent = frames;
+        // fpsDisplay.textContent = frames;
         frames = 0;
         lastFpsUpdate = now;
       }

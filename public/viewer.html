@@ -42,7 +42,54 @@
     </style>
   </head>
   <body>
-    <h2>WebRTC Viewer</h2>
+    <div
+      style="
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      "
+    >
+      <div
+        style="
+          width: min-content;
+          display: flex;
+          justify-content: center;
+          gap: 0;
+          margin-bottom: 30px;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        "
+      >
+        <a href="/" style="text-decoration: none">
+          <button
+            style="
+              padding: 10px 20px;
+              border: none;
+              background: #e0e0e0;
+              color: #333;
+              cursor: pointer;
+            "
+          >
+            Streamer
+          </button>
+        </a>
+        <button
+          style="
+            padding: 10px 20px;
+            border: none;
+            background: #007bff;
+            color: white;
+            font-weight: bold;
+            cursor: default;
+          "
+        >
+          Viewer
+        </button>
+      </div>
+    </div>
+
     <video id="remoteVideo" autoplay playsinline controls></video>
     <br />
     <button id="fullscreenBtn">Full Screen</button>
