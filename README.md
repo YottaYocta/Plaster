@@ -1,3 +1,7 @@
+The CTL at Cornell regularly uses Meta Quest's screencasting for VR classes. Sadly, Meta's casting is unreliable.
+
+I made this as a backup in case Meta casting fails.
+
 <img width="3420" height="1970" alt="image" src="https://github.com/user-attachments/assets/020fd035-cd57-42b1-a2cb-a342e70592fb" />
 
 # Setting Up the App: Easy Step-by-Step Guide
